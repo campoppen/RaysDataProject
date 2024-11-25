@@ -1,0 +1,83 @@
+---
+title: "Rays Data Project Notes"
+author: "Cameron Poppen"
+date: "2024-11-24"
+output: html_document
+---
+
+## Data
+First, we're going to load in the necessary library for functions and take a look at a basic summary of the data.
+
+```{r data}
+library(tidyverse)
+data <- read.csv("battedBallData.csv")
+summary(data)
+```
+
+## Editing Data
+
+Now, that we have saved the data, we're going to edit it to get the results we want.
+
+```{r mutate}
+data <- data %>%
+  mutate(
+    true_exit_speed = case_when(
+      !is.na(speed_A) & !is.na(speed_B) ~ 0.85 * speed_A + 0.15 * speed_B,
+      !is.na(speed_A) ~ speed_A,
+      !is.na(speed_B) ~ speed_B,
+    )
+  )
+```
+
+If both of the measurement systems had data for the specific hit, I decided to use a weighted average using both.
+
+I took 85% of system A, since it's the most reliable, and use 15% of B, just in case there is some error in system A.
+
+But if either of them is NA, I just keep the data as given.
+
+## Save Data
+
+I saved the batters average speed based on the "batter id" given and the average of the weighted averages of their batted balls
+
+```{r save}
+batter_avg_speed <- data %>%
+  group_by(batter) %>%
+  summarize(
+    avg_speed = mean(true_exit_speed, na.rm = TRUE)
+  )
+batter_avg_speed
+```
+
+I chose this simple model because it's very difficult to perfectly predict a players performance the following year, but the best data we have is based on the previous years, all things considered.
+
+## Player Evaluation
+
+The following code will help is find how well a player compares to the rest of the players
+
+```{r players}
+mean_speed <- mean(batter_avg_speed$avg_speed, na.rm = TRUE)
+sd_speed <- sd(batter_avg_speed$avg_speed, na.rm = TRUE)
+
+mean_plus_2sd <- mean_speed + 2 * sd_speed
+mean_plus_1sd <- mean_speed + sd_speed
+mean_minus_1sd <- mean_speed - sd_speed
+mean_minus_2sd <- mean_speed - 2 * sd_speed
+```
+
+The following code tells whether a player is great, good, above average, below average, bad, or terrible, basing it on how they fair on the standard deviations.
+
+``` {r sd}
+batter_avg_speed <- batter_avg_speed %>%
+  mutate(
+    projected_performance = case_when(
+      avg_speed > mean_plus_2sd ~ 'Great',
+      avg_speed > mean_plus_1sd ~ 'Good',
+      avg_speed > mean_speed ~ 'Above average',
+      avg_speed > mean_minus_1sd ~ 'Below average',
+      avg_speed > mean_minus_2sd ~ 'Bad',
+      TRUE ~ 'Terrible'
+    )
+  )
+```
+
+The rest of the code in the ensures that the output is fairly readable and understandable.
